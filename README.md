@@ -11,6 +11,7 @@ https://api.slack.com/.
 ```sh
 gem install slackcat
 export SLACK_TOKEN=<your api token>
+echo <your api token> > ~/.slackcat
 echo 'hello world' | slackcat -c <channel>
 ```
 
@@ -27,6 +28,8 @@ derivatives, you need to install the `ruby-dev` package.
 ## Command-line options
 
 ```
+          --message, -s <x>:   Post a plain message
+
             --token, -k <s>:   Slack API token
          --channels, -c <s>:   Channels to share
            --groups, -g <s>:   Groups to share
@@ -40,6 +43,17 @@ derivatives, you need to install the `ruby-dev` package.
          --download, -d <s>:   Download a linked file
           --save-as, -s <s>:   Save downloaded file as
                  --help, -h:   Show this message
+```
+
+## Basic usage: simple messages
+
+To send a simple message to a channel (e.g., announcing that you 
+will be afk (away from keyboard).
+
+Examples:
+
+```sh
+slackcat -c general --message "stepping out; biab"
 ```
 
 ## Basic usage: text snippets

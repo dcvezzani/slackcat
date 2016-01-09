@@ -90,6 +90,15 @@ class Slackcat
 
 end
 
+unless ENV.has_key?('SLACK_TOKEN')
+  puts ">1>"
+  if File.exists?(File.expand_path('~/.slackcat'))
+    puts ">2>"
+    ENV['SLACK_TOKEN'] = IO.read(File.expand_path('~/.slackcat')).chomp
+    puts ">3>: #{ENV['SLACK_TOKEN']}"
+  end
+end
+
 opts = Trollop::options do
   opt :token,           'Slack API token',            type: :string,  short: 'k', default: ENV.fetch('SLACK_TOKEN', nil)
   opt :channels,        'Channels to share',          type: :string,  short: 'c', default: ''
@@ -103,6 +112,7 @@ opts = Trollop::options do
   opt :multipart,       'Multipart upload each file', type: :boolean, short: 'm', default: false
   opt :download,        'Download a linked file',     type: :string,  short: 'd'
   opt :save_as,         'Save downloaded file as',    type: :string,  short: 's'
+  opt :message,         'Send a simple message',      type: :string,  short: 'x'
 end
 
 raise 'set slack API token using SLACK_TOKEN or -k option' unless opts[:token]
@@ -134,7 +144,10 @@ params = {
   channels:        (channels + groups + ims).join(',')
 }.select { |_, value| value }
 
-if opts[:post] #simple text post
+if opts[:message] #simple text post (not from file)
+  slack.post_message(text: opts[:message], channel: params[:channels], as_user: true)
+
+elsif opts[:post] #simple text post
   slack.post_message(text: ARGF.read, channel: params[:channels], as_user: true)
 elsif opts[:multipart] #upload multiple individual binary files
   ARGV.each do |arg|

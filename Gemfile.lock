@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    slackcat (0.2.5)
+    slackcat (0.2.5.1)
       httmultiparty
       trollop
 
@@ -12,15 +12,15 @@ GEM
       httparty (>= 0.7.3)
       mimemagic
       multipart-post
-    httparty (0.13.3)
+    httparty (0.13.5)
       json (~> 1.8)
       multi_xml (>= 0.5.2)
-    json (1.8.2)
-    mimemagic (0.2.1)
+    json (1.8.3)
+    mimemagic (0.3.1)
     multi_xml (0.5.5)
     multipart-post (2.0.0)
     rake (10.3.2)
-    trollop (2.1.1)
+    trollop (1.16.2)
 
 PLATFORMS
   ruby
@@ -29,3 +29,6 @@ DEPENDENCIES
   bundler (~> 1.3)
   rake
   slackcat!
+
+BUNDLED WITH
+   1.11.2
