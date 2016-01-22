@@ -2,6 +2,10 @@
 
 require 'httmultiparty'
 require 'trollop'
+require 'time'
+require 'date'
+require 'byebug'
+require 'json'
 
 class Slackcat
   include HTTMultiParty
@@ -11,6 +15,110 @@ class Slackcat
     @token = token
   end
 
+  # I have to create my own slack integration tool for searching, I guess
+  def search_time_sheet_events(options={})
+    days = {}
+    method = 'search.messages'
+    max_cnt = 15
+    cnt = 0
+    cur_date = options[:start]
+    total_hours = 0.0
+
+    loop do
+      entries = []
+      fdate = cur_date.strftime('%Y-%m-%d')
+      printf "\n>>> processing #{fdate}"
+        
+      query = "in:engineering from:me on:#{fdate} biab"
+      matches = self.class.get("/#{method}", query: { token: @token, query: query }).tap do |response|
+        printf "v"
+        raise "error searching for #{query} from #{method}: #{response.fetch('error', 'unknown error')}" unless response['ok']
+      end.fetch("messages").fetch("matches")
+
+      entries.concat matches.map{|x| 
+        printf "."
+        x['ts'] = DateTime.strptime(x['ts'],'%s').to_time
+        {ts: x['ts'], permalink: x['permalink'], text: x['text']}
+      }
+
+      query = "in:engineering from:me on:#{fdate} brb"
+      matches = self.class.get("/#{method}", query: { token: @token, query: query }).tap do |response|
+        printf "v"
+        raise "error searching for #{query} from #{method}: #{response.fetch('error', 'unknown error')}" unless response['ok']
+      end.fetch("messages").fetch("matches")
+
+      entries.concat matches.map{|x| 
+        printf "."
+        x['ts'] = DateTime.strptime(x['ts'],'%s').to_time
+        {ts: x['ts'], permalink: x['permalink'], text: x['text']}
+      }
+      
+      query = "in:engineering from:me on:#{fdate} back"
+      matches = self.class.get("/#{method}", query: { token: @token, query: query }).tap do |response|
+        printf "v"
+        raise "error searching for #{query} from #{method}: #{response.fetch('error', 'unknown error')}" unless response['ok']
+      end.fetch("messages").fetch("matches")
+
+      entries.concat matches.map{|x| 
+        printf "."
+        x['ts'] = DateTime.strptime(x['ts'],'%s').to_time
+        {ts: x['ts'], permalink: x['permalink'], text: x['text']}
+      }
+      
+      query = "in:engineering from:me on:#{fdate} good"
+      matches = self.class.get("/#{method}", query: { token: @token, query: query }).tap do |response|
+        printf "v"
+        raise "error searching for #{query} from #{method}: #{response.fetch('error', 'unknown error')}" unless response['ok']
+      end.fetch("messages").fetch("matches")
+
+      entries.concat matches.map{|x| 
+        printf "."
+        x['ts'] = DateTime.strptime(x['ts'],'%s').to_time
+        {ts: x['ts'], permalink: x['permalink'], text: x['text']}
+      }
+
+      entries = entries.sort_by { |h| h[:ts] }
+      days[fdate] = {entries: entries}
+
+      prev_entry = nil
+      seconds = 60*15
+      total_time_for_day = 0.0
+      entries.each do |entry|
+        printf "."
+        if(prev_entry)
+          stop = Time.at((entry[:ts].to_f / seconds).round * seconds)
+          entry[:ts] = stop
+          diff = entry[:ts] - prev_entry[:ts]
+          prev_entry[:diff] = diff/(60*60)
+
+          total_time_for_day += prev_entry[:diff]
+        else
+          start = Time.at((entry[:ts].to_f / seconds).round * seconds)
+          entry[:ts] = start
+        end
+
+        prev_entry = entry
+      end
+
+      if entries.length > 0
+        entries[entries.length-1][:diff] = 0.0 
+        days[fdate][:hours] = total_time_for_day
+        total_hours += days[fdate][:hours]
+        printf "=> #{days[fdate][:hours]} for day; #{total_hours} for range"
+      end
+
+      break unless(cnt > max_cnt or cur_date < options[:stop])
+
+      # go to next day
+      cur_date += (60*60*24)
+      cnt += 1
+    end
+
+    report = {report: days, hours: total_hours}
+    puts "\n>>> DONE!"
+    report
+  end
+  
   ## get a channel, group, im or user list
   def get_objects(method, key)
     self.class.get("/#{method}", query: { token: @token }).tap do |response|
@@ -90,12 +198,40 @@ class Slackcat
 
 end
 
+=begin
+e.g., 
+bin/slackcat -g dave-v-notes --message "hello"
+
+SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat -g dave-v-notes --message "testing"
+SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet
+
+SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet --tsdate 2016-01-08
+
+SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet --tsrange last-two-weeks
+cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")), {hours: .hours}), {total_hours: .hours}'
+
+cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))'
+
+SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet; cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))'
+
+SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))'
+
+
+# prepare report for Numbers
+SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet; cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))' > time_sheet_report-$(date +%Y%m%d).txt
+
+mvim time_sheet_report-$(date +%Y%m%d).txt
+%s/^[\[\]\n]\+/\r/g
+%s/^ *\"\(\d\{4\}\)-\(\d\{2\}\)-\(\d\{2\}\) \(\d\{2\}\):\(\d\{2\}\):\(\d\{2\}\) [^[:space:]]\+ [^[:space:]]\+ \([^[:space:]]\+\) \([^\"]\+\)\".*$/\1	\2	\3	\4	\5	\6	\8	\7/g
+
+
+=end
 unless ENV.has_key?('SLACK_TOKEN')
-  puts ">1>"
+  # puts ">1>"
   if File.exists?(File.expand_path('~/.slackcat'))
-    puts ">2>"
+    # puts ">2>"
     ENV['SLACK_TOKEN'] = IO.read(File.expand_path('~/.slackcat')).chomp
-    puts ">3>: #{ENV['SLACK_TOKEN']}"
+    # puts ">3>: #{ENV['SLACK_TOKEN']}"
   end
 end
 
@@ -113,9 +249,13 @@ opts = Trollop::options do
   opt :download,        'Download a linked file',     type: :string,  short: 'd'
   opt :save_as,         'Save downloaded file as',    type: :string,  short: 's'
   opt :message,         'Send a simple message',      type: :string,  short: 'x'
+  opt :timesheet,       'Get timesheet events',                       short: 'X'
+  opt :tsdate,          'Specify date (req :time..)', type: :string,  short: 'D', default: Time.now.strftime("%Y-%m-%d")
+  opt :tsrange,         'Specify date range',         type: :string,  short: 'r', default: nil #, default: "#{(Time.now - 14*(60*60*24)).strftime("%Y-%m-%d")}:#{(Time.now).strftime("%Y-%m-%d")}"
 end
 
 raise 'set slack API token using SLACK_TOKEN or -k option' unless opts[:token]
+# puts ">> #{opts[:token]}"
 slack = Slackcat.new(opts[:token])
 
 ## use default channel if no destination given
@@ -144,7 +284,29 @@ params = {
   channels:        (channels + groups + ims).join(',')
 }.select { |_, value| value }
 
-if opts[:message] #simple text post (not from file)
+if opts[:timesheet] #search for timesheet related messages
+  options = {}
+  if(opts[:tsrange] and opts[:tsrange] == 'last-two-weeks')
+    options[:stop] = Date.today.to_time
+    options[:start] = options[:stop] - 14*(60*60*24)
+    
+  elsif(opts[:tsrange])
+    parts = opts[:tsrange].split(/\s*:\s*/)
+    options[:start] = Time.strptime(parts[0].strip, '%Y-%m-%d')
+    options[:stop] = Time.strptime(parts[1].strip, '%Y-%m-%d')
+
+  else
+    options[:start] = Time.strptime(opts[:tsdate].strip, '%Y-%m-%d')
+    options[:stop] = Time.strptime(opts[:tsdate].strip, '%Y-%m-%d')
+  end
+
+  report = slack.search_time_sheet_events(options)
+  report_out = JSON.generate(report)
+  File.open("./time_sheet_report.txt", "w"){|f| f.write report_out}
+  
+  puts report_out
+
+elsif opts[:message] #simple text post (not from file)
   slack.post_message(text: opts[:message], channel: params[:channels], as_user: true)
 
 elsif opts[:post] #simple text post
