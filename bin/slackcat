@@ -220,6 +220,9 @@ SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timeshe
 # prepare report for Numbers
 SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet; cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))' > time_sheet_report-$(date +%Y%m%d).txt
 
+# for a given day
+SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet --tsdate 2016-01-22; cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))' > time_sheet_report-$(date +%Y%m%d).txt
+
 mvim time_sheet_report-$(date +%Y%m%d).txt
 %s/^[\[\]\n]\+/\r/g
 %s/^ *\"\(\d\{4\}\)-\(\d\{2\}\)-\(\d\{2\}\) \(\d\{2\}\):\(\d\{2\}\):\(\d\{2\}\) [^[:space:]]\+ [^[:space:]]\+ \([^[:space:]]\+\) \([^\"]\+\)\".*$/\1	\2	\3	\4	\5	\6	\8	\7/g
