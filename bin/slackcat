@@ -7,6 +7,17 @@ require 'date'
 require 'byebug'
 require 'json'
 
+class Time
+  # Time#round already exists with different meaning in Ruby 1.9
+  def round_off(seconds = 60)
+    Time.at((self.to_f / seconds).round * seconds)
+  end
+
+  def floor(seconds = 60)
+    Time.at((self.to_f / seconds).floor * seconds)
+  end
+end
+
 class Slackcat
   include HTTMultiParty
   base_uri 'https://slack.com/api'
@@ -38,7 +49,7 @@ class Slackcat
       entries.concat matches.map{|x| 
         printf "."
         x['ts'] = DateTime.strptime(x['ts'],'%s').to_time
-        {ts: x['ts'], permalink: x['permalink'], text: x['text']}
+        {state: :off, ts: x['ts'], permalink: x['permalink'], text: x['text']}
       }
 
       query = "in:engineering from:me on:#{fdate} brb"
@@ -50,7 +61,7 @@ class Slackcat
       entries.concat matches.map{|x| 
         printf "."
         x['ts'] = DateTime.strptime(x['ts'],'%s').to_time
-        {ts: x['ts'], permalink: x['permalink'], text: x['text']}
+        {state: :off, ts: x['ts'], permalink: x['permalink'], text: x['text']}
       }
       
       query = "in:engineering from:me on:#{fdate} back"
@@ -62,7 +73,7 @@ class Slackcat
       entries.concat matches.map{|x| 
         printf "."
         x['ts'] = DateTime.strptime(x['ts'],'%s').to_time
-        {ts: x['ts'], permalink: x['permalink'], text: x['text']}
+        {state: :on, ts: x['ts'], permalink: x['permalink'], text: x['text']}
       }
       
       query = "in:engineering from:me on:#{fdate} good"
@@ -74,30 +85,46 @@ class Slackcat
       entries.concat matches.map{|x| 
         printf "."
         x['ts'] = DateTime.strptime(x['ts'],'%s').to_time
-        {ts: x['ts'], permalink: x['permalink'], text: x['text']}
+        state = (x['text'] =~ /evening|night/) ? :off : :on
+        {state: state, ts: x['ts'], permalink: x['permalink'], text: x['text']}
       }
 
       entries = entries.sort_by { |h| h[:ts] }
       days[fdate] = {entries: entries}
 
-      prev_entry = nil
+      start_entry = nil
       seconds = 60*15
       total_time_for_day = 0.0
+      start = nil
       entries.each do |entry|
         printf "."
-        if(prev_entry)
+        entry[:diff] = 0
+
+        if(entry[:state] == :off)
           stop = Time.at((entry[:ts].to_f / seconds).round * seconds)
+          start = nil
           entry[:ts] = stop
-          diff = entry[:ts] - prev_entry[:ts]
-          prev_entry[:diff] = diff/(60*60)
+          diff = entry[:ts] - start_entry[:ts]
+          start_entry[:diff] = (diff/(60*60))
 
-          total_time_for_day += prev_entry[:diff]
+          total_time_for_day += start_entry[:diff]
+          start_entry = nil
         else
-          start = Time.at((entry[:ts].to_f / seconds).round * seconds)
-          entry[:ts] = start
-        end
+          time = Time.at((entry[:ts].to_f / seconds).round * seconds)
+          entry[:ts] = time
 
-        prev_entry = entry
+          start_entry = entry if start_entry.nil?
+        end
+      end
+
+      if(start_entry)
+        time = Time.at((Time.now.to_f / seconds).round * seconds)
+
+        diff_work = time - start_entry[:ts]
+        start_entry[:diff] = diff_work/(60*60)
+        total_time_for_day += start_entry[:diff]
+          
+        entries << {state: :pending, ts: time, text: "still working"}
       end
 
       if entries.length > 0
@@ -114,7 +141,8 @@ class Slackcat
       cnt += 1
     end
 
-    report = {report: days, hours: total_hours}
+    days[:hours] = total_hours
+    report = {report: days}
     puts "\n>>> DONE!"
     report
   end
@@ -202,26 +230,36 @@ end
 e.g., 
 bin/slackcat -g dave-v-notes --message "hello"
 
-SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat -g dave-v-notes --message "testing"
-SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet
+SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat -g dave-v-notes --message "testing"
+SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat --timesheet
 
-SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet --tsdate 2016-01-08
+SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat --timesheet --tsdate 2016-01-08
 
-SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet --tsrange last-two-weeks
+SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat --timesheet --tsrange last-two-weeks
 cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")), {hours: .hours}), {total_hours: .hours}'
 
 cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))'
 
-SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet; cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))'
+SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat --timesheet; cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))'
 
-SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))'
+SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat --timesheet | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))'
 
 
 # prepare report for Numbers
-SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet; cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))' > time_sheet_report-$(date +%Y%m%d).txt
+SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat --timesheet; cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))' > time_sheet_report-$(date +%Y%m%d).txt
 
 # for a given day
-SLACK_TOKEN=xoxp-3629040653-4461760926-18115144817-f2b9acc3f1 slackcat --timesheet --tsdate 2016-01-22; cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))' > time_sheet_report-$(date +%Y%m%d).txt
+SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat --timesheet --tsdate 2016-01-27; cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))' > time_sheet_report-$(date +%Y%m%d).txt
+
+
+### current
+# ================================================================================
+
+target_date=$(echo '2016-02-01')
+target_date=$(date +%Y-%m-%d)
+REAL_TAB=$(echo -e "\t"); SLACK_TOKEN=$(cat ~/.slackcat) slackcat --timesheet --tsdate $target_date; echo -e $(cat time_sheet_report.txt | jq '(.report | map(.)[range(0;(length-1))] | .entries | map(.) | map("\(.ts) \(.diff) \(.permalink) \(.text)")) | join("\n")' | sed 's/^\"//g' | sed 's/\"$//g') | sed '/^\([[:digit:]]\{4\}\)-\([[:digit:]]\{2\}\)-\([[:digit:]]\{2\}\) \([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\) [^[:space:]]\{1,\} \([\.[:digit:]]\{1,\}\) \([^[:space:]]\{1,\}\) \(.*\)/ {; s/^\([[:digit:]]\{4\}\)-\([[:digit:]]\{2\}\)-\([[:digit:]]\{2\}\) \([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\) [^[:space:]]\{1,\} \([\.[:digit:]]\{1,\}\) \([^[:space:]]\{1,\}\) \(.*\)/\1'$REAL_TAB'\2'$REAL_TAB'\3'$REAL_TAB'\4'$REAL_TAB'\5'$REAL_TAB'\6'$REAL_TAB'\7'$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB'\9'$REAL_TAB'\8/; }' > time_sheet_report-$target_date.txt; cat time_sheet_report-$target_date.txt | pbcopy; echo "hours today: $(cat time_sheet_report.txt | jq '(.report."'$target_date'".hours)')"; echo "hours for the period: $(cat time_sheet_report.txt | jq '(.report.hours)')"; echo "mvim time_sheet_report-$target_date.txt"
+
+# ================================================================================
 
 mvim time_sheet_report-$(date +%Y%m%d).txt
 %s/^[\[\]\n]\+/\r/g
