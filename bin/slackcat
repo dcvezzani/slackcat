@@ -93,6 +93,7 @@ class Slackcat
       days[fdate] = {entries: entries}
 
       start_entry = nil
+      last_entry = nil
       seconds = 60*15
       total_time_for_day = 0.0
       start = nil
@@ -104,6 +105,7 @@ class Slackcat
           stop = Time.at((entry[:ts].to_f / seconds).round * seconds)
           start = nil
           entry[:ts] = stop
+          next if entry.nil? or start_entry.nil?
           diff = entry[:ts] - start_entry[:ts]
           start_entry[:diff] = (diff/(60*60))
 
@@ -115,16 +117,25 @@ class Slackcat
 
           start_entry = entry if start_entry.nil?
         end
+        last_entry = entry
       end
 
       if(start_entry)
-        time = Time.at((Time.now.to_f / seconds).round * seconds)
+        today = Time.now.strftime("%Y%m%d")
+        process_day = start_entry[:ts].strftime("%Y%m%d")
 
-        diff_work = time - start_entry[:ts]
-        start_entry[:diff] = diff_work/(60*60)
-        total_time_for_day += start_entry[:diff]
-          
-        entries << {state: :pending, ts: time, text: "still working"}
+        if(today == process_day)
+          time = Time.at((Time.now.to_f / seconds).round * seconds)
+
+          diff_work = time - start_entry[:ts]
+          start_entry[:diff] = diff_work/(60*60)
+          total_time_for_day += start_entry[:diff]
+            
+          entries << {state: :pending, ts: time, text: "still working"}
+
+        else
+          entries << {state: :off, ts: last_entry[:ts], text: "good day/evening (you never checked out?)"}
+        end
       end
 
       if entries.length > 0
@@ -227,44 +238,23 @@ class Slackcat
 end
 
 =begin
-e.g., 
-bin/slackcat -g dave-v-notes --message "hello"
-
-SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat -g dave-v-notes --message "testing"
-SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat --timesheet
-
-SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat --timesheet --tsdate 2016-01-08
-
-SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat --timesheet --tsrange last-two-weeks
-cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")), {hours: .hours}), {total_hours: .hours}'
-
-cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))'
-
-SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat --timesheet; cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))'
-
-SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat --timesheet | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))'
-
-
-# prepare report for Numbers
-SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat --timesheet; cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))' > time_sheet_report-$(date +%Y%m%d).txt
-
-# for a given day
-SLACK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx slackcat --timesheet --tsdate 2016-01-27; cat time_sheet_report.txt | jq '(.report | map(.)[] | (.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)")))' > time_sheet_report-$(date +%Y%m%d).txt
-
 
 ### current
 # ================================================================================
 
-target_date=$(echo '2016-02-01')
+bin/slackcat --timesheet
+bin/slackcat --timesheet --tsdate 2016-01-08
+bin/slackcat --timesheet --tsrange last-two-weeks
+bin/slackcat --timesheet --tsrange 2016-02-08:2016-02-19
+
 target_date=$(date +%Y-%m-%d)
-REAL_TAB=$(echo -e "\t"); SLACK_TOKEN=$(cat ~/.slackcat) slackcat --timesheet --tsdate $target_date; echo -e $(cat time_sheet_report.txt | jq '(.report | map(.)[range(0;(length-1))] | .entries | map(.) | map("\(.ts) \(.diff) \(.permalink) \(.text)")) | join("\n")' | sed 's/^\"//g' | sed 's/\"$//g') | sed '/^\([[:digit:]]\{4\}\)-\([[:digit:]]\{2\}\)-\([[:digit:]]\{2\}\) \([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\) [^[:space:]]\{1,\} \([\.[:digit:]]\{1,\}\) \([^[:space:]]\{1,\}\) \(.*\)/ {; s/^\([[:digit:]]\{4\}\)-\([[:digit:]]\{2\}\)-\([[:digit:]]\{2\}\) \([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\) [^[:space:]]\{1,\} \([\.[:digit:]]\{1,\}\) \([^[:space:]]\{1,\}\) \(.*\)/\1'$REAL_TAB'\2'$REAL_TAB'\3'$REAL_TAB'\4'$REAL_TAB'\5'$REAL_TAB'\6'$REAL_TAB'\7'$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB'\9'$REAL_TAB'\8/; }' > time_sheet_report-$target_date.txt; cat time_sheet_report-$target_date.txt | pbcopy; echo "hours today: $(cat time_sheet_report.txt | jq '(.report."'$target_date'".hours)')"; echo "hours for the period: $(cat time_sheet_report.txt | jq '(.report.hours)')"; echo "mvim time_sheet_report-$target_date.txt"
+REAL_TAB=$(echo -e "\t"); SLACK_TOKEN=$(cat ~/.slackcat) bin/slackcat --timesheet --tsrange 2016-02-08:2016-02-19; echo -e $(cat time_sheet_report.txt) | jq -r '.report | to_entries | map(select(.key != "hours") | .value.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)") | join("\n")) | join("\n\n")' | sed '/^\([[:digit:]]\{4\}\)-\([[:digit:]]\{2\}\)-\([[:digit:]]\{2\}\) \([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\) [^[:space:]]\{1,\} \([\.[:digit:]]\{1,\}\) \([^[:space:]]\{1,\}\) \(.*\)/ {; s/^\([[:digit:]]\{4\}\)-\([[:digit:]]\{2\}\)-\([[:digit:]]\{2\}\) \([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\) [^[:space:]]\{1,\} \([\.[:digit:]]\{1,\}\) \([^[:space:]]\{1,\}\) \(.*\)/\1'$REAL_TAB'\2'$REAL_TAB'\3'$REAL_TAB'\4'$REAL_TAB'\5'$REAL_TAB'\6'$REAL_TAB'\7'$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB'\9'$REAL_TAB'\8/; }' > time_sheet_report-$target_date.txt; cat time_sheet_report-$target_date.txt | pbcopy; echo "hours today: $(cat time_sheet_report.txt | jq '(.report."'$target_date'".hours)')"; echo "hours for the period: $(cat time_sheet_report.txt | jq '(.report.hours)')"; echo "mvim time_sheet_report-$target_date.txt"
 
 # ================================================================================
 
-mvim time_sheet_report-$(date +%Y%m%d).txt
-%s/^[\[\]\n]\+/\r/g
-%s/^ *\"\(\d\{4\}\)-\(\d\{2\}\)-\(\d\{2\}\) \(\d\{2\}\):\(\d\{2\}\):\(\d\{2\}\) [^[:space:]]\+ [^[:space:]]\+ \([^[:space:]]\+\) \([^\"]\+\)\".*$/\1	\2	\3	\4	\5	\6	\8	\7/g
+REAL_TAB=$(echo -e "\t"); cat time_sheet_report.txt | jq -r '.report | to_entries | map(select(.key != "hours") | .value.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)") | join("\n")) | join("\n\n")' | sed '/^\([[:digit:]]\{4\}\)-\([[:digit:]]\{2\}\)-\([[:digit:]]\{2\}\) \([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\) [^[:space:]]\{1,\} \([\.[:digit:]]\{1,\}\) \([^[:space:]]\{1,\}\) \(.*\)/ {; s/^\([[:digit:]]\{4\}\)-\([[:digit:]]\{2\}\)-\([[:digit:]]\{2\}\) \([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\) [^[:space:]]\{1,\} \([\.[:digit:]]\{1,\}\) \([^[:space:]]\{1,\}\) \(.*\)/\1'$REAL_TAB'\2'$REAL_TAB'\3'$REAL_TAB'\4'$REAL_TAB'\5'$REAL_TAB'\6'$REAL_TAB'\7'$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB'\9'$REAL_TAB'\8/; }' > time_sheet_report-$target_date.txt; cat time_sheet_report-$target_date.txt | pbcopy; echo "hours today: $(cat time_sheet_report.txt | jq '(.report."'$target_date'".hours)')"; echo "hours for the period: $(cat time_sheet_report.txt | jq '(.report.hours)')"; echo "mvim time_sheet_report-$target_date.txt"
 
+# ================================================================================
 
 =end
 unless ENV.has_key?('SLACK_TOKEN')
@@ -301,7 +291,7 @@ slack = Slackcat.new(opts[:token])
 
 ## use default channel if no destination given
 if opts.values_at(:channels, :groups, :users).all?(&:empty?)
-  opts[:channels] = ENV.fetch('SLACK_CHANNEL', '')
+  opts[:channels] = ENV.fetch('SLACK_CHANNEL', 'engineering')
 end
 
 ## translate destination names into slack ids
@@ -363,5 +353,9 @@ elsif opts[:download] #download a linked file
   dst  = slack.download({file: file}, opts[:save_as])
   puts "File downloaded to #{dst}"
 else #upload concatenated text snippet
+  unless(opts[:filename])
+    opts[:filename] = ARGF.filename
+  end
+
   slack.upload(params.merge(content: ARGF.read))
 end
