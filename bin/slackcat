@@ -283,6 +283,7 @@ opts = Trollop::options do
   opt :timesheet,       'Get timesheet events',                       short: 'X'
   opt :tsdate,          'Specify date (req :time..)', type: :string,  short: 'D', default: Time.now.strftime("%Y-%m-%d")
   opt :tsrange,         'Specify date range',         type: :string,  short: 'r', default: nil #, default: "#{(Time.now - 14*(60*60*24)).strftime("%Y-%m-%d")}:#{(Time.now).strftime("%Y-%m-%d")}"
+  opt :sample,          'Show sample usage',          type: :boolean, default: false
 end
 
 raise 'set slack API token using SLACK_TOKEN or -k option' unless opts[:token]
@@ -315,7 +316,23 @@ params = {
   channels:        (channels + groups + ims).join(',')
 }.select { |_, value| value }
 
-if opts[:timesheet] #search for timesheet related messages
+if opts[:sample] #show sample usage
+
+puts <<-EOL
+# =============================================================================
+
+slackcat --timesheet
+slackcat --timesheet --tsdate 2016-01-08
+slackcat --timesheet --tsrange last-two-weeks
+slackcat --timesheet --tsrange 2016-02-08:2016-02-19
+
+target_date=$(date +%Y-%m-%d)
+REAL_TAB=$(echo -e "\\t"); SLACK_TOKEN=$(cat ~/.slackcat) slackcat --timesheet --tsrange 2016-02-08:2016-02-19; echo -e $(cat time_sheet_report.txt) | sed 's/\\n//g' | jq -r '.report | to_entries | map(select(.key != "hours") | .value.entries | map("\\(.ts) \\(.diff) \\(.permalink) \\(.text)") | join("\\n")) | join("\\n\\n")' | sed '/^\\([[:digit:]]\\{4\\}\\)-\\([[:digit:]]\\{2\\}\\)-\\([[:digit:]]\\{2\\}\\) \\([[:digit:]]\\{2\\}\\):\\([[:digit:]]\\{2\\}\\):\\([[:digit:]]\\{2\\}\\) [^[:space:]]\\{1,\\} \\([\\.[:digit:]]\\{1,\\}\\) \\([^[:space:]]\\{1,\\}\\) \\(.*\\)/ {; s/^\\([[:digit:]]\\{4\\}\\)-\\([[:digit:]]\\{2\\}\\)-\\([[:digit:]]\\{2\\}\\) \\([[:digit:]]\\{2\\}\\):\\([[:digit:]]\\{2\\}\\):\\([[:digit:]]\\{2\\}\\) [^[:space:]]\\{1,\\} \\([\\.[:digit:]]\\{1,\\}\\) \\([^[:space:]]\\{1,\\}\\) \\(.*\\)/\\1'$REAL_TAB'\\2'$REAL_TAB'\\3'$REAL_TAB'\\4'$REAL_TAB'\\5'$REAL_TAB'\\6'$REAL_TAB'\\7'$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB'\\9'$REAL_TAB'\\8/; }' > time_sheet_report-$target_date.txt; cat time_sheet_report-$target_date.txt | pbcopy; echo "hours today: $(cat time_sheet_report.txt | jq '(.report."'$target_date'".hours)')"; echo "hours for the period: $(cat time_sheet_report.txt | jq '(.report.hours)')"; echo "mvim time_sheet_report-$target_date.txt"
+
+# =============================================================================
+EOL
+
+elsif opts[:timesheet] #search for timesheet related messages
   options = {}
   if(opts[:tsrange] and opts[:tsrange] == 'last-two-weeks')
     options[:stop] = Date.today.to_time
