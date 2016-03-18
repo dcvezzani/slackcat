@@ -1,0 +1,5 @@
+#!/bin/bash
+
+target_date=$(date +%Y-%m-%d)
+SLACK_TOKEN=$(cat ~/.slackcat) slackcat --timesheet --tsdate $target_date; echo -e $(cat time_sheet_report.txt | jq '(.report | map(.)[range(0;(length-1))] | .entries | map(.) | map("\(.ts) \(.diff) \(.permalink) \(.text)")) | join("\n")' | sed 's/^\"//g' | sed 's/\"$//g') | sed '/^\([[:digit:]]\{4\}\)-\([[:digit:]]\{2\}\)-\([[:digit:]]\{2\}\) \([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\) [^[:space:]]\{1,\} \([\.[:digit:]]\{1,\}\) \([^[:space:]]\{1,\}\) \(.*\)/ {; s/^\([[:digit:]]\{4\}\)-\([[:digit:]]\{2\}\)-\([[:digit:]]\{2\}\) \([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\) [^[:space:]]\{1,\} \([\.[:digit:]]\{1,\}\) \([^[:space:]]\{1,\}\) \(.*\)/\1	\2	\3	\4	\5	\6	\7								\9	\8/; }' > time_sheet_report-$target_date.txt; cat time_sheet_report-$target_date.txt | pbcopy; echo "hours today: $(cat time_sheet_report.txt | jq '(.report."'$target_date'".hours)')"; echo "hours for the period: $(cat time_sheet_report.txt | jq '(.report.hours)')"; echo "mvim time_sheet_report-$target_date.txt"
+

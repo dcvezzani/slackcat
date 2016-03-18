@@ -98,24 +98,32 @@ class Slackcat
       total_time_for_day = 0.0
       start = nil
       entries.each do |entry|
-        printf "."
-        entry[:diff] = 0
+        begin
+          printf "."
+          entry[:diff] = 0
 
-        if(entry[:state] == :off)
-          stop = Time.at((entry[:ts].to_f / seconds).round * seconds)
-          start = nil
-          entry[:ts] = stop
-          next if entry.nil? or start_entry.nil?
-          diff = entry[:ts] - start_entry[:ts]
-          start_entry[:diff] = (diff/(60*60))
+          if(entry[:state] == :off)
+            stop = Time.at((entry[:ts].to_f / seconds).round * seconds)
+            start = nil
+            entry[:ts] = stop
+            next unless start_entry
 
-          total_time_for_day += start_entry[:diff]
-          start_entry = nil
-        else
-          time = Time.at((entry[:ts].to_f / seconds).round * seconds)
-          entry[:ts] = time
+            diff = entry[:ts] - start_entry[:ts]
+            start_entry[:diff] = (diff/(60*60))
 
-          start_entry = entry if start_entry.nil?
+            total_time_for_day += start_entry[:diff]
+            start_entry = nil
+          else
+            time = Time.at((entry[:ts].to_f / seconds).round * seconds)
+            entry[:ts] = time
+
+            start_entry = entry if start_entry.nil?
+          end
+        rescue Exception => e
+          puts "Problem with entry: #{entry.inspect}
+start_entry: #{start_entry.inspect}
+"
+          raise e
         end
         last_entry = entry
       end
@@ -283,7 +291,7 @@ opts = Trollop::options do
   opt :timesheet,       'Get timesheet events',                       short: 'X'
   opt :tsdate,          'Specify date (req :time..)', type: :string,  short: 'D', default: Time.now.strftime("%Y-%m-%d")
   opt :tsrange,         'Specify date range',         type: :string,  short: 'r', default: nil #, default: "#{(Time.now - 14*(60*60*24)).strftime("%Y-%m-%d")}:#{(Time.now).strftime("%Y-%m-%d")}"
-  opt :sample,          'Show sample usage',          type: :boolean, default: false
+  opt :sample,          'Get sample command'
 end
 
 raise 'set slack API token using SLACK_TOKEN or -k option' unless opts[:token]
@@ -316,7 +324,7 @@ params = {
   channels:        (channels + groups + ims).join(',')
 }.select { |_, value| value }
 
-if opts[:sample] #show sample usage
+if opts[:sample] #put sample call in clip board
 
 puts <<-EOL
 # =============================================================================
@@ -326,11 +334,18 @@ slackcat --timesheet --tsdate 2016-01-08
 slackcat --timesheet --tsrange last-two-weeks
 slackcat --timesheet --tsrange 2016-02-08:2016-02-19
 
-target_date=$(date +%Y-%m-%d)
-REAL_TAB=$(echo -e "\t"); REAL_NL=$(echo -e "\n"); SLACK_TOKEN=$(cat ~/.slackcat) slackcat --timesheet --tsrange 2016-03-02:2016-03-03; cat time_sheet_report.txt | sed 'x;G;1!h;s/\\n//g;$!d' | jq -r '.report | to_entries | map(select(.key != "hours") | .value.entries | map("\(.ts) \(.diff) \(.permalink) \(.text)") | join("\n")) | join("\n\n")' | sed '/^\([[:digit:]]\{4\}\)-\([[:digit:]]\{2\}\)-\([[:digit:]]\{2\}\) \([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\) [^[:space:]]\{1,\} \([\.[:digit:]]\{1,\}\) \([^[:space:]]\{1,\}\) \(.*\)/ {; s/^\([[:digit:]]\{4\}\)-\([[:digit:]]\{2\}\)-\([[:digit:]]\{2\}\) \([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\):\([[:digit:]]\{2\}\) [^[:space:]]\{1,\} \([\.[:digit:]]\{1,\}\) \([^[:space:]]\{1,\}\) \(.*\)/\1'$REAL_TAB'\2'$REAL_TAB'\3'$REAL_TAB'\4'$REAL_TAB'\5'$REAL_TAB'\6'$REAL_TAB'\7'$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB$REAL_TAB'\9'$REAL_TAB'\8/; }' > time_sheet_report-$target_date.txt; cat time_sheet_report-$target_date.txt | pbcopy; echo "hours today: $(cat time_sheet_report.txt | jq '(.report."'$target_date'".hours)')"; echo "hours for the period: $(cat time_sheet_report.txt | jq '(.report.hours)')"; echo "mvim time_sheet_report-$target_date.txt"
-
 # =============================================================================
+
 EOL
+  
+  # debugger
+  # puts ">>> #{ENV['TSDATE']}"
+  if ENV.has_key?('TSDATE')
+    puts `TSDATE='#{ENV['TSDATE']}' bin/sample.sh`
+    puts "Sample saved to clip board"
+  else
+    `bin/sample.sh`
+  end
 
 elsif opts[:timesheet] #search for timesheet related messages
   options = {}
