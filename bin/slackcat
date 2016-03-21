@@ -27,6 +27,39 @@ class Slackcat
   end
 
   # I have to create my own slack integration tool for searching, I guess
+  def search_time_sheet_activities(options={})
+    cur_date = options[:start]
+    method = 'search.messages'
+    entries = []
+    cnt = 0
+    max_cnt = 15
+
+    loop do
+      fdate = cur_date.strftime('%Y-%m-%d')
+      printf "\n>>> gathering activities for #{fdate}"
+        
+      query = "in:engineering from:me on:#{fdate}"
+      matches = self.class.get("/#{method}", query: { token: @token, query: query }).tap do |response|
+        printf "v"
+        raise "error searching for #{query} from #{method}: #{response.fetch('error', 'unknown error')}" unless response['ok']
+      end.fetch("messages").fetch("matches")
+
+      entries.concat matches.map{|x| 
+        printf "."
+        x['ts'] = DateTime.strptime(x['ts'],'%s').to_time
+        {ts: x['ts'], permalink: x['permalink'], text: x['text']}
+      }
+
+      break unless(cnt > max_cnt or cur_date < options[:stop])
+      
+      cur_date += (60*60*24)
+      cnt += 1
+    end
+
+    entries = entries.sort_by { |h| h[:ts] }
+  end
+
+  # I have to create my own slack integration tool for searching, I guess
   def search_time_sheet_events(options={})
     days = {}
     method = 'search.messages'
@@ -264,6 +297,13 @@ REAL_TAB=$(echo -e "\t"); cat time_sheet_report.txt | jq -r '.report | to_entrie
 
 # ================================================================================
 
+STR='[{"state":"on","ts":"2016-03-21 06:19:03 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458566343000659","text":"kudos for finding the fix"},{"state":"on","ts":"2016-03-21 06:21:55 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458566515000665","text":"that must have been fun to figure out"},{"state":"on","ts":"2016-03-21 06:22:44 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458566564000667","text":"wow"},{"state":"on","ts":"2016-03-21 06:27:05 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458566825000669","text":"I guess it’s good that some where, some how there is a check to make sure the CC isn’t expired, but something like Nagios seems like a better place to put that"},{"state":"on","ts":"2016-03-21 06:35:47 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458567347000678","text":"yeah; that’s why I didn’t think including the CC in the unit tests was a good idea"},{"state":"on","ts":"2016-03-21 06:36:23 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458567383000679","text":"but it’s not a bad idea to have something bring to our attention an expired credit card"},{"state":"on","ts":"2016-03-21 06:37:05 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458567425000684","text":"oh; ok — that makes more sense now :simple_smile:"},{"state":"on","ts":"2016-03-21 06:48:44 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458568124000687","text":"<@U03JLEDS8>: with all the graphic artists we have and the kind of business that we’re in, I would imagine a good anime page would be great"},{"state":"on","ts":"2016-03-21 06:48:49 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458568129000688","text":"for the 404"},{"state":"on","ts":"2016-03-21 06:49:54 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458568194000691","text":":simple_smile:"},{"state":"on","ts":"2016-03-21 07:44:41 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458571481000695","text":"oh no"},{"state":"on","ts":"2016-03-21 10:14:11 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458580451000699","text":"perfect"},{"state":"on","ts":"2016-03-21 10:14:43 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458580483000703","text":"doesn’t look too fluffy"},{"state":"on","ts":"2016-03-21 10:30:21 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458581421000710","text":"that was fast"},{"state":"on","ts":"2016-03-21 10:30:37 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458581437000712","text":"anytime I go to the ER for anything, it’s 4 hours minimum"},{"state":"on","ts":"2016-03-21 10:31:11 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458581471000713","text":"I’m glad to hear there weren’t any fractures involved"},{"state":"on","ts":"2016-03-21 10:35:48 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458581748000715","text":"yes"},{"state":"on","ts":"2016-03-21 10:52:34 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458582754000720","text":"nothing like a little spice in life… sometimes, we could use a little less"},{"state":"on","ts":"2016-03-21 10:57:03 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458583023000723","text":"brb"},{"state":"on","ts":"2016-03-21 11:12:19 -0700","permalink":"https://crystalcommerce.slack.com/archives/engineering/p1458583939000724","text":"back"}]'
+
+echo -e $(cat time_sheet_activities.txt | jq 'to_entries|map("\(.value.ts): \(.value.permalink) \(.value.text)")|join("\n")' |sed 's/^\"//g'|sed 's/\"$//g') > chk.txt
+
+
+# ================================================================================
+#
 =end
 unless ENV.has_key?('SLACK_TOKEN')
   # puts ">1>"
@@ -288,6 +328,7 @@ opts = Trollop::options do
   opt :download,        'Download a linked file',     type: :string,  short: 'd'
   opt :save_as,         'Save downloaded file as',    type: :string,  short: 's'
   opt :message,         'Send a simple message',      type: :string,  short: 'x'
+  opt :activities,      'Get timesheet events',                       short: 'A'
   opt :timesheet,       'Get timesheet events',                       short: 'X'
   opt :tsdate,          'Specify date (req :time..)', type: :string,  short: 'D', default: Time.now.strftime("%Y-%m-%d")
   opt :tsrange,         'Specify date range',         type: :string,  short: 'r', default: nil #, default: "#{(Time.now - 14*(60*60*24)).strftime("%Y-%m-%d")}:#{(Time.now).strftime("%Y-%m-%d")}"
@@ -338,7 +379,6 @@ slackcat --timesheet --tsrange 2016-02-08:2016-02-19
 
 EOL
   
-  # debugger
   # puts ">>> #{ENV['TSDATE']}"
   if ENV.has_key?('TSDATE')
     puts `TSDATE='#{ENV['TSDATE']}' bin/sample.sh`
@@ -347,6 +387,30 @@ EOL
     `bin/sample.sh`
   end
 
+elsif opts[:activities] 
+  options = {}
+
+  if(!opts.has_key?(:tsdate))
+    opts[:tsdate] = Time.now.strftime("%Y-%m-%d")
+  end
+
+  if(opts[:tsrange])
+    parts = opts[:tsrange].split(/\s*:\s*/)
+    options[:start] = Time.strptime(parts[0].strip, '%Y-%m-%d')
+    options[:stop] = Time.strptime(parts[1].strip, '%Y-%m-%d')
+
+  else
+    options[:start] = Time.strptime(opts[:tsdate].strip, '%Y-%m-%d')
+    options[:stop] = Time.strptime(opts[:tsdate].strip, '%Y-%m-%d')
+  end
+  
+  report = slack.search_time_sheet_activities(options)
+
+  report_out = JSON.generate(report)
+  File.open("./time_sheet_activities.txt", "w"){|f| f.write report_out}
+  
+  puts "\ntime_sheet_activities.txt"
+  
 elsif opts[:timesheet] #search for timesheet related messages
   options = {}
   if(opts[:tsrange] and opts[:tsrange] == 'last-two-weeks')
@@ -391,3 +455,5 @@ else #upload concatenated text snippet
 
   slack.upload(params.merge(content: ARGF.read))
 end
+
+
