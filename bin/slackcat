@@ -365,7 +365,6 @@ params = {
   channels:        (channels + groups + ims).join(',')
 }.select { |_, value| value }
 
-<<<<<<< HEAD
 if opts[:sample] #put sample call in clip board
 
 puts <<-EOL
