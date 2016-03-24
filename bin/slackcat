@@ -384,7 +384,8 @@ EOL
     puts `TSDATE='#{ENV['TSDATE']}' bin/sample.sh`
     puts "Sample saved to clip board"
   else
-    `bin/sample.sh`
+    path = File.symlink?(__FILE__) ? File.dirname(File.readlink(__FILE__)) : File.dirname(__FILE__)
+    echo `#{path}/sample.sh`
   end
 
 elsif opts[:activities] 
