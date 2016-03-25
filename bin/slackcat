@@ -380,12 +380,12 @@ slackcat --timesheet --tsrange 2016-02-08:2016-02-19
 EOL
   
   # puts ">>> #{ENV['TSDATE']}"
+  path = File.symlink?(__FILE__) ? File.dirname(File.readlink(__FILE__)) : File.dirname(__FILE__)
   if ENV.has_key?('TSDATE')
-    puts `TSDATE='#{ENV['TSDATE']}' bin/sample.sh`
+    puts `TSDATE='#{ENV['TSDATE']}' #{path}/sample.sh`
     puts "Sample saved to clip board"
   else
-    path = File.symlink?(__FILE__) ? File.dirname(File.readlink(__FILE__)) : File.dirname(__FILE__)
-    echo `#{path}/sample.sh`
+    puts `#{path}/sample.sh`
   end
 
 elsif opts[:activities] 
