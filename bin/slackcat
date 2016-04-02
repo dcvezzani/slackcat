@@ -385,6 +385,7 @@ EOL
     puts `TSDATE='#{ENV['TSDATE']}' #{path}/sample.sh`
     puts "Sample saved to clip board"
   else
+    puts "Optional: define TSDATE (=2016-03-03 or =2016-03-01:2016-03-03); defaults to current date"
     puts `#{path}/sample.sh`
   end
 
