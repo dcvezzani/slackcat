@@ -3,7 +3,7 @@
 pat=":"
 if [[ "$TSDATE" =~ [$pat] ]]; then
   target_date="${TSDATE#*:}"
-  date_options='--tsrange $TSDATE'
+  date_options='--tsrange '"$TSDATE"
 else
   if [ "$TSDATE" == '' ]; then
     target_date=$(date +'%Y-%m-%d')

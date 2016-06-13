@@ -375,9 +375,16 @@ slackcat --timesheet --tsdate 2016-01-08
 slackcat --timesheet --tsrange last-two-weeks
 slackcat --timesheet --tsrange 2016-02-08:2016-02-19
 
+TSDATE=#{(Time.now - (60*60*24)).strftime("%Y-%m-%d")} slackcat --sample
+TSDATE=#{(Time.now - (60*60*24)).strftime("%Y-%m-%d")}:#{(Time.now).strftime("%Y-%m-%d")} slackcat --sample
+TSDATE=#{(Time.now).strftime("%Y-%m-%d")} slackcat --sample
+
 # =============================================================================
 
 EOL
+
+# $(date -j -v -1d -f "%Y-%m-%d" "$(date +%Y-%m-%d)" +%Y-%m-%d)
+
   
   # puts ">>> #{ENV['TSDATE']}"
   path = File.symlink?(__FILE__) ? File.dirname(File.readlink(__FILE__)) : File.dirname(__FILE__)
