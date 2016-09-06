@@ -416,6 +416,8 @@ TSDATE=#{(Time.now - (60*60*24)).strftime("%Y-%m-%d")} slackcat --sample
 TSDATE=#{(Time.now - (60*60*24)).strftime("%Y-%m-%d")}:#{(Time.now).strftime("%Y-%m-%d")} slackcat --sample
 TSDATE=#{(Time.now).strftime("%Y-%m-%d")} slackcat --sample
 
+SLACK_CHANNELS=engineering,internal-engineering,team-marketplace,engineering-firefight slackcat --activities --tsrange 2016-08-22:2016-09-02
+
 # =============================================================================
 
 EOL
